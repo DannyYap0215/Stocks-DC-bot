@@ -21,6 +21,29 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
 
+    # Try to send a startup message to the configured channel
+    channel = None
+    if CHANNEL_ID:
+        try:
+            channel = bot.get_channel(int(CHANNEL_ID))
+        except ValueError:
+            pass
+
+    if not channel:
+        for guild in bot.guilds:
+            for c in guild.text_channels:
+                if c.permissions_for(guild.me).send_messages:
+                    channel = c
+                    break
+            if channel:
+                break
+
+    if channel:
+        try:
+            await channel.send(f"✅ **{bot.user.name}** is online and ready! Try typing `!news` or `!undervalued`.")
+        except discord.errors.Forbidden:
+            print(f"ERROR: Bot does not have permission to send messages in channel {channel.name}.")
+
     # Start background tasks
     if not major_news_scanner.is_running():
         major_news_scanner.start()
