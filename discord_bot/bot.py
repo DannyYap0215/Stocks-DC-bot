@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 # Import our custom modules
 from stock_data import analyze_stocks, format_stock_list
-from news_data import check_for_major_news, get_daily_news_summary
+from news_data import check_for_major_news, get_daily_news_summary, format_major_news
+from portfolio import add_to_portfolio, view_portfolio
 
 # Load environment variables
 load_dotenv()
@@ -52,6 +53,32 @@ async def on_ready():
         daily_summary.start()
 
 # --- Commands ---
+
+@bot.group(name='portfolio', invoke_without_command=True, help='Manage your personal portfolio. Type !portfolio for commands.')
+async def portfolio_group(ctx):
+    """Portfolio management root command."""
+    if ctx.invoked_subcommand is None:
+        await ctx.send("Available commands:\n`!portfolio add <ticker> <shares> <price>`\n`!portfolio view`")
+
+@portfolio_group.command(name='add', help='Add a stock to your portfolio: !portfolio add NVDA 10 125.50')
+async def portfolio_add(ctx, ticker: str, shares: float, price: float):
+    user_id = ctx.author.id
+    try:
+        add_to_portfolio(user_id, ticker, shares, price)
+        await ctx.send(f"✅ Added {shares} shares of {ticker.upper()} at ${price:.2f} to your portfolio.")
+    except Exception as e:
+        await ctx.send(f"❌ Error adding to portfolio: {e}")
+
+@portfolio_group.command(name='view', help='View your current portfolio')
+async def portfolio_view(ctx):
+    await ctx.send("Fetching your portfolio data...")
+    user_id = ctx.author.id
+    try:
+        result = view_portfolio(user_id)
+        await ctx.send(result)
+    except Exception as e:
+        await ctx.send(f"❌ Error fetching portfolio: {e}")
+
 
 @bot.command(name='undervalued', help='Shows top undervalued stocks based on P/E ratio')
 async def show_undervalued(ctx):
@@ -114,10 +141,12 @@ async def major_news_scanner():
 
     alerts = check_for_major_news()
     if alerts:
-        await channel.send("🚨 **MAJOR NEWS ALERT** 🚨")
-        for alert in alerts:
-            msg = f"**{alert['title']}**\n{alert['link']}"
-            await channel.send(msg)
+        alert_msg = format_major_news(alerts)
+        if alert_msg:
+            # Handle max discord msg length
+            if len(alert_msg) > 2000:
+                alert_msg = alert_msg[:1997] + "..."
+            await channel.send(alert_msg)
 
 @tasks.loop(hours=24)
 async def daily_summary():

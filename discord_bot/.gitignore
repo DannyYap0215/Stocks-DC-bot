@@ -9,6 +9,9 @@ env/
 venv/
 ENV/
 
+# Data
+portfolios.json
+
 # OS generated files
 .DS_Store
 .DS_Store?

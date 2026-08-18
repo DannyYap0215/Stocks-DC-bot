@@ -2,12 +2,12 @@ import yfinance as yf
 import pandas as pd
 import datetime
 
-# A simplified list of popular/major stocks to avoid rate limits
+# A focused list of tech, memory, and semiconductor stocks, plus VXUS
 POPULAR_TICKERS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA",
-    "JPM", "V", "WMT", "JNJ", "PG", "MA", "HD", "CVX",
-    "MRK", "KO", "PEP", "COST", "BAC", "DIS", "NFLX",
-    "AMD", "INTC", "CSCO"
+    "NVDA", "MU", "WDC", "TSM", "AMD", "ASML", "INTC",
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
+    "QCOM", "TXN", "AMAT", "LRCX", "KLAC", "SNPS", "CDNS",
+    "ARM", "SMCI", "STX", "VXUS"
 ]
 
 def calculate_rsi(data, periods=14):
