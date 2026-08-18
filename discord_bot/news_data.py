@@ -13,8 +13,6 @@ NEWS_FEEDS = [
     # Add more feeds if needed
 ]
 
-import re
-
 # Keywords that indicate a major event
 MAJOR_NEWS_KEYWORDS = [
     "war", "conflict", "crash", "fed rate", "emergency",

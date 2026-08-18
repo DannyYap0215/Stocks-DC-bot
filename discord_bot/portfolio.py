@@ -60,12 +60,13 @@ def view_portfolio(user_id):
         try:
             # Get current price
             ticker_obj = yf.Ticker(ticker)
-            hist = ticker_obj.history(period="1d")
 
-            if hist.empty:
+            # Use fast_info for more reliable current price
+            # and better compatibility with latest yfinance
+            current_price = ticker_obj.fast_info.get("lastPrice")
+
+            if current_price is None:
                 raise ValueError("No price data found.")
-
-            current_price = hist['Close'].iloc[-1]
 
             value = current_price * shares
             total_value += value
