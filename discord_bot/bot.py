@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 # Import our custom modules
-from stock_data import analyze_stocks, format_stock_list
+from stock_data import analyze_stocks, format_stock_list, get_live_price
 from news_data import check_for_major_news, get_daily_news_summary, format_major_news
 from portfolio import add_to_portfolio, view_portfolio
 
@@ -100,6 +100,36 @@ async def show_fomo(ctx):
     results = analyze_stocks()
     formatted = format_stock_list(results['fomo'], 'FOMO')
     await ctx.send(formatted)
+
+@bot.command(name='live', aliases=['price'], help='Shows the live price of a specific stock: !live AAPL')
+async def show_live_price(ctx, *tickers):
+    if not tickers:
+        await ctx.send("Please provide at least one ticker. Example: `!live NVDA AAPL`")
+        return
+
+    await ctx.send("Fetching live prices...")
+
+    result_str = "⏱️ **Live Market Prices**\n\n"
+
+    for ticker in tickers[:5]: # Limit to 5 at a time to prevent spam
+        ticker = ticker.upper()
+        data = get_live_price(ticker)
+
+        if data:
+            price = data['price']
+            change = data['change']
+            change_pct = data['change_pct']
+
+            if change is not None and change_pct is not None:
+                emoji = "🟢" if change >= 0 else "🔴"
+                sign = "+" if change >= 0 else ""
+                result_str += f"**{ticker}**: ${price:.2f} | {emoji} {sign}${change:.2f} ({sign}{change_pct:.2f}%)\n"
+            else:
+                result_str += f"**{ticker}**: ${price:.2f}\n"
+        else:
+            result_str += f"**{ticker}**: ⚠️ *Could not fetch data or invalid ticker*\n"
+
+    await ctx.send(result_str)
 
 @bot.command(name='news', help='Shows a summary of the latest financial news')
 async def show_news(ctx):

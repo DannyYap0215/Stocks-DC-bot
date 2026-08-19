@@ -100,6 +100,36 @@ def analyze_stocks():
         'fomo': fomo
     }
 
+def get_live_price(ticker_symbol):
+    """Fetches the real-time live price of a given ticker."""
+    try:
+        ticker = yf.Ticker(ticker_symbol.upper())
+        # Use fast_info for more reliable current price
+        price = ticker.fast_info['lastPrice']
+
+        # Also try to get previous close to calculate daily change
+        prev_close = ticker.fast_info['previousClose']
+
+        if price is None:
+            return None
+
+        change = None
+        change_pct = None
+
+        if prev_close and prev_close > 0:
+            change = price - prev_close
+            change_pct = (change / prev_close) * 100
+
+        return {
+            'ticker': ticker_symbol.upper(),
+            'price': price,
+            'change': change,
+            'change_pct': change_pct
+        }
+    except Exception as e:
+        print(f"Error fetching live price for {ticker_symbol}: {e}")
+        return None
+
 def format_stock_list(stock_list, category):
     """Formats a list of stocks into a readable string."""
     if not stock_list:

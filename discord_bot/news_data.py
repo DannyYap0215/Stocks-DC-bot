@@ -71,8 +71,7 @@ def check_for_major_news():
 
     # Clean up seen links if it gets too large to prevent memory issues
     if len(seen_news_links) > 1000:
-        # Keep only the last 500 (this is a simple approach, a queue or timestamp-based cleanup is better for production)
-        seen_news_links = set(list(seen_news_links)[-500:])
+        seen_news_links.clear() # simpler safe approach for a set
 
     return major_news_alerts
 

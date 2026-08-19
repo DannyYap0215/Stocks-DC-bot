@@ -63,7 +63,7 @@ def view_portfolio(user_id):
 
             # Use fast_info for more reliable current price
             # and better compatibility with latest yfinance
-            current_price = ticker_obj.fast_info.get("lastPrice")
+            current_price = ticker_obj.fast_info['lastPrice']
 
             if current_price is None:
                 raise ValueError("No price data found.")
