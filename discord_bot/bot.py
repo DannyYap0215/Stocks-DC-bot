@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 # Import our custom modules
-from stock_data import analyze_stocks, format_stock_list, get_live_price
+from stock_data import analyze_stocks, format_stock_list, get_live_price, scan_unusual_activity
 from news_data import check_for_major_news, get_daily_news_summary, format_major_news
 from portfolio import add_to_portfolio, view_portfolio
 from alerts import add_alert, get_user_alerts, remove_alert, get_all_alerts, remove_alert_by_value
@@ -55,6 +55,9 @@ async def on_ready():
 
     if not check_price_alerts.is_running():
         check_price_alerts.start()
+
+    if not unusual_activity_scanner.is_running():
+        unusual_activity_scanner.start()
 
 # --- Commands ---
 
@@ -200,6 +203,55 @@ async def show_news(ctx):
     await ctx.send(summary)
 
 # --- Background Tasks ---
+
+# Keep track of alerts we've already sent today to avoid spamming the channel
+seen_volatility_alerts = set()
+
+@tasks.loop(minutes=15)
+async def unusual_activity_scanner():
+    """Scans for major price swings and posts to the channel if found."""
+    channel = None
+    if CHANNEL_ID:
+        try:
+            channel = bot.get_channel(int(CHANNEL_ID))
+        except ValueError:
+            pass
+
+    if not channel:
+        for guild in bot.guilds:
+            for c in guild.text_channels:
+                if c.permissions_for(guild.me).send_messages:
+                    channel = c
+                    break
+            if channel:
+                break
+
+    if not channel:
+        return
+
+    alerts = scan_unusual_activity()
+    if not alerts:
+        return
+
+    new_alerts = []
+    for alert in alerts:
+        # Create a unique key for today (ticker + direction)
+        # In a real production app, we'd reset this set daily at market open
+        alert_key = f"{alert['ticker']}_{alert['direction']}"
+        if alert_key not in seen_volatility_alerts:
+            new_alerts.append(alert)
+            seen_volatility_alerts.add(alert_key)
+
+    if new_alerts:
+        msg = "⚠️ **[UNUSUAL MARKET ACTIVITY DETECTED]** ⚠️\n\n"
+        for a in new_alerts:
+            msg += f"**{a['ticker']}** is {a['direction']}! {a['emoji']} {a['change_pct']:.2f}% (Current: ${a['price']:.2f})\n"
+
+        await channel.send(msg)
+
+    # Simple memory management to prevent unbounded growth over weeks
+    if len(seen_volatility_alerts) > 500:
+        seen_volatility_alerts.clear()
 
 @tasks.loop(minutes=1)
 async def check_price_alerts():

@@ -164,6 +164,35 @@ def get_live_price(ticker_symbol):
             print(f"Fallback yfinance error for {ticker_symbol}: {fallback_e}")
             return None
 
+def scan_unusual_activity():
+    """Scans popular stocks for major price swings."""
+    alerts = []
+
+    for ticker in POPULAR_TICKERS:
+        data = get_live_price(ticker)
+        if not data or data['change_pct'] is None:
+            continue
+
+        change_pct = data['change_pct']
+        price = data['price']
+
+        # Flag if the stock moved more than 5% up or down today
+        if abs(change_pct) >= 5.0:
+            direction = "🚀 SURGING" if change_pct > 0 else "🩸 PLUNGING"
+            emoji = "🟢" if change_pct > 0 else "🔴"
+
+            alerts.append({
+                'ticker': ticker,
+                'price': price,
+                'change_pct': change_pct,
+                'direction': direction,
+                'emoji': emoji
+            })
+
+    # Sort alerts by biggest absolute move
+    alerts.sort(key=lambda x: abs(x['change_pct']), reverse=True)
+    return alerts
+
 def format_stock_list(stock_list, category):
     """Formats a list of stocks into a readable string."""
     if not stock_list:
