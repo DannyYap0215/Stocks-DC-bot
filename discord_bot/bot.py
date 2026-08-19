@@ -8,6 +8,8 @@ from stock_data import analyze_stocks, format_stock_list, get_live_price, scan_u
 from news_data import check_for_major_news, get_daily_news_summary, format_major_news
 from portfolio import add_to_portfolio, view_portfolio
 from alerts import add_alert, get_user_alerts, remove_alert, get_all_alerts, remove_alert_by_value
+from dashboard import DashboardView
+from charts import generate_chart
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +24,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
+
+    # Register the persistent view so buttons work after restarts
+    bot.add_view(DashboardView())
 
     # Try to send a startup message to the configured channel
     channel = None
@@ -42,7 +47,14 @@ async def on_ready():
 
     if channel:
         try:
-            await channel.send(f"✅ **{bot.user.name}** is online and ready! Try typing `!news` or `!undervalued`.")
+            view = DashboardView()
+            embed = discord.Embed(
+                title="📊 Ultimate Trading Dashboard",
+                description="Click the buttons below to instantly access live market intel, social sentiment, and alerts without typing commands.",
+                color=discord.Color.blue()
+            )
+            embed.set_footer(text="Powered by the Ultimate Trading Bot | Type !dashboard to see this again")
+            await channel.send(f"✅ **{bot.user.name}** is online and ready!", embed=embed, view=view)
         except discord.errors.Forbidden:
             print(f"ERROR: Bot does not have permission to send messages in channel {channel.name}.")
 
@@ -60,6 +72,17 @@ async def on_ready():
         unusual_activity_scanner.start()
 
 # --- Commands ---
+
+@bot.command(name='dashboard', aliases=['menu', 'hub'], help='Opens the interactive trading dashboard')
+async def show_dashboard(ctx):
+    view = DashboardView()
+    embed = discord.Embed(
+        title="📊 Ultimate Trading Dashboard",
+        description="Click the buttons below to instantly access live market intel, social sentiment, and alerts without typing commands.",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="Powered by the Ultimate Trading Bot")
+    await ctx.send(embed=embed, view=view)
 
 @bot.group(name='portfolio', invoke_without_command=True, help='Manage your personal portfolio. Type !portfolio for commands.')
 async def portfolio_group(ctx):
@@ -161,6 +184,21 @@ async def show_fomo(ctx):
     formatted = format_stock_list(results['fomo'], 'FOMO')
     await ctx.send(formatted)
 
+@bot.command(name='chart', aliases=['c'], help='Generates a visual candlestick chart: !chart AAPL')
+async def show_chart(ctx, ticker: str):
+    await ctx.send(f"📊 Generating chart for **{ticker.upper()}**...")
+
+    # Run the chart generation, which might be slightly blocking
+    # For a truly massive bot, this would run in an executor, but it's fine here
+    try:
+        chart_file = generate_chart(ticker)
+        if chart_file:
+            await ctx.send(file=chart_file)
+        else:
+            await ctx.send(f"❌ Could not generate chart for **{ticker.upper()}**. Invalid ticker or no data.")
+    except Exception as e:
+        await ctx.send(f"❌ Error generating chart: {e}")
+
 @bot.command(name='live', aliases=['price'], help='Shows the live price of a specific stock: !live AAPL')
 async def show_live_price(ctx, *tickers):
     if not tickers:
@@ -190,6 +228,27 @@ async def show_live_price(ctx, *tickers):
             result_str += f"**{ticker}**: ⚠️ *Could not fetch data or invalid ticker*\n"
 
     await ctx.send(result_str)
+
+@bot.command(name='earnings', aliases=['calendar'], help='Shows upcoming earnings for popular tracked tech stocks')
+async def show_earnings(ctx):
+    await ctx.send("Checking upcoming earnings calendar... 📅")
+    from earnings import get_upcoming_earnings
+    earnings = get_upcoming_earnings()
+    await ctx.send(earnings)
+
+@bot.command(name='whales', aliases=['options', 'flow'], help='Scans for massive unusual options activity')
+async def show_whales(ctx):
+    await ctx.send("Scanning options chains for whale activity... 🐋 (This takes a moment)")
+    from options import scan_unusual_options
+    flow = scan_unusual_options()
+    await ctx.send(flow)
+
+@bot.command(name='sentiment', aliases=['reddit', 'wsb'], help='Shows top trending stocks on Reddit')
+async def show_sentiment(ctx):
+    await ctx.send("Scraping r/wallstreetbets for sentiment... 🦍")
+    from reddit_sentiment import get_reddit_sentiment
+    sentiment = get_reddit_sentiment()
+    await ctx.send(sentiment)
 
 @bot.command(name='news', help='Shows a summary of the latest financial news')
 async def show_news(ctx):
