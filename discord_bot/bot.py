@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from stock_data import analyze_stocks, format_stock_list, get_live_price
 from news_data import check_for_major_news, get_daily_news_summary, format_major_news
 from portfolio import add_to_portfolio, view_portfolio
+from alerts import add_alert, get_user_alerts, remove_alert, get_all_alerts, remove_alert_by_value
 
 # Load environment variables
 load_dotenv()
@@ -52,6 +53,9 @@ async def on_ready():
     if not daily_summary.is_running():
         daily_summary.start()
 
+    if not check_price_alerts.is_running():
+        check_price_alerts.start()
+
 # --- Commands ---
 
 @bot.group(name='portfolio', invoke_without_command=True, help='Manage your personal portfolio. Type !portfolio for commands.')
@@ -78,6 +82,59 @@ async def portfolio_view(ctx):
         await ctx.send(result)
     except Exception as e:
         await ctx.send(f"❌ Error fetching portfolio: {e}")
+
+# --- Alert Commands ---
+
+@bot.group(name='alert', invoke_without_command=True, help='Manage custom price alerts. Type !alert for commands.')
+async def alert_group(ctx):
+    """Alert management root command."""
+    if ctx.invoked_subcommand is None:
+        await ctx.send("Available commands:\n`!alert add <ticker> < > or < > <price>` (e.g. `!alert add AAPL > 150`)\n`!alert list`\n`!alert remove <id>`")
+
+@alert_group.command(name='add', help='Add a price alert: !alert add AAPL > 150')
+async def alert_add(ctx, ticker: str, condition: str, price: float):
+    if condition not in ['>', '<']:
+        await ctx.send("❌ Condition must be either `>` or `<`. Example: `!alert add AAPL > 150`")
+        return
+
+    user_id = ctx.author.id
+    try:
+        added = add_alert(user_id, ticker, condition, price)
+        if added:
+            await ctx.send(f"✅ Alert set: I will DM you when **{ticker.upper()}** is **{condition} ${price:.2f}**.")
+        else:
+            await ctx.send(f"⚠️ You already have an exact alert set for **{ticker.upper()} {condition} ${price:.2f}**.")
+    except Exception as e:
+        await ctx.send(f"❌ Error adding alert: {e}")
+
+@alert_group.command(name='list', help='List your active alerts')
+async def alert_list(ctx):
+    user_id = ctx.author.id
+    alerts = get_user_alerts(user_id)
+
+    if not alerts:
+        await ctx.send("You don't have any active alerts.")
+        return
+
+    result = "🔔 **Your Active Alerts:**\n\n"
+    for i, alert in enumerate(alerts):
+        # 1-based indexing for user friendliness
+        result += f"**ID {i+1}**: {alert['ticker']} {alert['condition']} ${alert['price']:.2f}\n"
+
+    result += "\n*Type `!alert remove <id>` to delete an alert.*"
+    await ctx.send(result)
+
+@alert_group.command(name='remove', help='Remove an alert by ID: !alert remove 1')
+async def alert_remove(ctx, alert_id: int):
+    user_id = ctx.author.id
+
+    # User provides 1-based ID, internal is 0-based
+    removed = remove_alert(user_id, alert_id - 1)
+
+    if removed:
+        await ctx.send(f"✅ Removed alert for **{removed['ticker']} {removed['condition']} ${removed['price']:.2f}**.")
+    else:
+        await ctx.send(f"❌ Could not find an alert with ID {alert_id}. Use `!alert list` to see your alerts.")
 
 
 @bot.command(name='undervalued', help='Shows top undervalued stocks based on P/E ratio')
@@ -143,6 +200,59 @@ async def show_news(ctx):
     await ctx.send(summary)
 
 # --- Background Tasks ---
+
+@tasks.loop(minutes=1)
+async def check_price_alerts():
+    """Iterates through all saved alerts, checks the live price, and DMs users if met."""
+    all_alerts = get_all_alerts()
+    if not all_alerts:
+        return
+
+    for user_id_str, alerts in all_alerts.items():
+        if not alerts:
+            continue
+
+        user = bot.get_user(int(user_id_str))
+        # If user isn't cached, try fetching them
+        if user is None:
+            try:
+                user = await bot.fetch_user(int(user_id_str))
+            except Exception:
+                continue # User might have left or Discord API error
+
+        # To avoid making dozens of duplicate API calls if a user has multiple alerts
+        # for the same ticker, we could cache prices per run, but for simplicity we'll
+        # just fetch them individually for now.
+        alerts_to_remove = []
+
+        for alert in alerts:
+            ticker = alert['ticker']
+            target_price = alert['price']
+            condition = alert['condition']
+
+            data = get_live_price(ticker)
+            if not data or data['price'] is None:
+                continue
+
+            current_price = data['price']
+            triggered = False
+
+            if condition == '>' and current_price > target_price:
+                triggered = True
+            elif condition == '<' and current_price < target_price:
+                triggered = True
+
+            if triggered:
+                try:
+                    await user.send(f"🚨 **PRICE ALERT** 🚨\n**{ticker}** has crossed your target!\nCondition: `{condition} ${target_price:.2f}`\nCurrent Price: **${current_price:.2f}**")
+                    alerts_to_remove.append(alert)
+                except discord.errors.Forbidden:
+                    # Can't send DM to this user
+                    pass
+
+        # Remove triggered alerts so they don't spam
+        for alert in alerts_to_remove:
+            remove_alert_by_value(int(user_id_str), alert)
 
 @tasks.loop(minutes=5)
 async def major_news_scanner():
