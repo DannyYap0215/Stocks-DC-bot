@@ -59,15 +59,13 @@ def view_portfolio(user_id):
 
         try:
             # Get current price
-            ticker_obj = yf.Ticker(ticker)
+            from stock_data import get_live_price
+            price_data = get_live_price(ticker)
 
-            # Use fast_info for more reliable current price
-            # and better compatibility with latest yfinance
-            current_price = ticker_obj.fast_info['lastPrice']
-
-            if current_price is None:
+            if not price_data or price_data['price'] is None:
                 raise ValueError("No price data found.")
 
+            current_price = price_data['price']
             value = current_price * shares
             total_value += value
 

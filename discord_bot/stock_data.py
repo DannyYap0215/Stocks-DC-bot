@@ -100,35 +100,69 @@ def analyze_stocks():
         'fomo': fomo
     }
 
+import urllib.request
+import json
+
 def get_live_price(ticker_symbol):
     """Fetches the real-time live price of a given ticker."""
+    ticker_symbol = ticker_symbol.upper()
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}"
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    })
+
     try:
-        ticker = yf.Ticker(ticker_symbol.upper())
-        # Use fast_info for more reliable current price
-        price = ticker.fast_info['lastPrice']
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+            meta = data['chart']['result'][0]['meta']
 
-        # Also try to get previous close to calculate daily change
-        prev_close = ticker.fast_info['previousClose']
+            price = meta.get('regularMarketPrice')
+            prev_close = meta.get('chartPreviousClose')
 
-        if price is None:
-            return None
+            if price is None:
+                return None
 
-        change = None
-        change_pct = None
+            change = None
+            change_pct = None
 
-        if prev_close and prev_close > 0:
-            change = price - prev_close
-            change_pct = (change / prev_close) * 100
+            if prev_close and prev_close > 0:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100
 
-        return {
-            'ticker': ticker_symbol.upper(),
-            'price': price,
-            'change': change,
-            'change_pct': change_pct
-        }
+            return {
+                'ticker': ticker_symbol,
+                'price': price,
+                'change': change,
+                'change_pct': change_pct
+            }
     except Exception as e:
-        print(f"Error fetching live price for {ticker_symbol}: {e}")
-        return None
+        print(f"Error fetching live price for {ticker_symbol} via Yahoo API: {e}")
+
+        # Fallback to yfinance if direct API fails
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            price = ticker.fast_info.get("lastPrice")
+            prev_close = ticker.fast_info.get("previousClose")
+
+            if price is None:
+                return None
+
+            change = None
+            change_pct = None
+
+            if prev_close and prev_close > 0:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100
+
+            return {
+                'ticker': ticker_symbol,
+                'price': price,
+                'change': change,
+                'change_pct': change_pct
+            }
+        except Exception as fallback_e:
+            print(f"Fallback yfinance error for {ticker_symbol}: {fallback_e}")
+            return None
 
 def format_stock_list(stock_list, category):
     """Formats a list of stocks into a readable string."""
