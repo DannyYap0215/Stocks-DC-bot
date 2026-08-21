@@ -2,6 +2,27 @@ import discord
 from news_data import get_daily_news_summary
 from stock_data import analyze_stocks, format_stock_list
 
+class ChartModal(discord.ui.Modal, title='View Stock Chart'):
+    ticker = discord.ui.TextInput(
+        label='Ticker Symbol',
+        placeholder='e.g., AAPL, NVDA, TSLA',
+        required=True,
+        max_length=10,
+        style=discord.TextStyle.short
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        ticker_val = self.ticker.value.upper().strip()
+
+        from charts import generate_chart
+        chart_file = generate_chart(ticker_val)
+
+        if chart_file:
+            await interaction.followup.send(f"📊 Chart for **{ticker_val}**:", file=chart_file, ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ Could not generate chart for **{ticker_val}**. Invalid ticker or no data.", ephemeral=True)
+
 class DashboardView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None) # Timeout None so it stays active
@@ -44,3 +65,8 @@ class DashboardView(discord.ui.View):
         from earnings import get_upcoming_earnings
         earnings = get_upcoming_earnings()
         await interaction.followup.send(earnings, ephemeral=True)
+
+    @discord.ui.button(label="📊 View Chart", style=discord.ButtonStyle.primary, custom_id="dashboard_chart", row=1)
+    async def btn_chart(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # We must return the Modal instantly, we cannot defer first for Modals
+        await interaction.response.send_modal(ChartModal())
