@@ -2,6 +2,7 @@ import yfinance as yf
 import mplfinance as mpf
 import io
 import discord
+import time
 
 def generate_chart(ticker_symbol, period="3mo"):
     """
@@ -10,9 +11,17 @@ def generate_chart(ticker_symbol, period="3mo"):
     """
     try:
         ticker = yf.Ticker(ticker_symbol.upper())
-        hist = ticker.history(period=period)
 
-        if hist.empty:
+        # Retry mechanism for yfinance, which can sporadically return empty dataframes
+        hist = None
+        for _ in range(3):
+            hist = ticker.history(period=period)
+            if not hist.empty:
+                break
+
+            time.sleep(0.5)
+
+        if hist is None or hist.empty:
             return None
 
         # Create an in-memory buffer to save the image

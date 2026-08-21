@@ -1,6 +1,8 @@
 import yfinance as yf
 import pandas as pd
 import datetime
+import urllib.request
+import json
 
 # A focused list of tech, memory, and semiconductor stocks, plus VXUS
 POPULAR_TICKERS = [
@@ -100,8 +102,6 @@ def analyze_stocks():
         'fomo': fomo
     }
 
-import urllib.request
-import json
 
 def get_live_price(ticker_symbol):
     """Fetches the real-time live price of a given ticker."""
@@ -114,13 +114,23 @@ def get_live_price(ticker_symbol):
     try:
         with urllib.request.urlopen(req) as response:
             data = json.loads(response.read().decode())
-            meta = data['chart']['result'][0]['meta']
+
+            # Robust null-checking before accessing dictionary keys
+            chart = data.get('chart', {})
+            result = chart.get('result')
+
+            if not result or not isinstance(result, list) or len(result) == 0:
+                raise Exception("API response missing 'result' array")
+
+            meta = result[0].get('meta')
+            if not meta:
+                raise Exception("API response missing 'meta' object")
 
             price = meta.get('regularMarketPrice')
             prev_close = meta.get('chartPreviousClose')
 
             if price is None:
-                return None
+                raise Exception("Missing regularMarketPrice in meta")
 
             change = None
             change_pct = None
