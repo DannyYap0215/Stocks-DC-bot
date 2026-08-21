@@ -192,7 +192,9 @@ async def show_chart(ctx, ticker: str):
     # For a truly massive bot, this would run in an executor, but it's fine here
     try:
         chart_file = generate_chart(ticker)
-        if chart_file:
+        if chart_file == "RATE_LIMITED":
+            await ctx.send(f"⚠️ Yahoo Finance rate limit exceeded. Please try again later.")
+        elif chart_file:
             await ctx.send(file=chart_file)
         else:
             await ctx.send(f"❌ Could not generate chart for **{ticker.upper()}**. Invalid ticker or no data.")
@@ -266,7 +268,7 @@ async def show_news(ctx):
 # Keep track of alerts we've already sent today to avoid spamming the channel
 seen_volatility_alerts = set()
 
-@tasks.loop(minutes=15)
+@tasks.loop(minutes=30)
 async def unusual_activity_scanner():
     """Scans for major price swings and posts to the channel if found."""
     channel = None
@@ -312,7 +314,7 @@ async def unusual_activity_scanner():
     if len(seen_volatility_alerts) > 500:
         seen_volatility_alerts.clear()
 
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=5)
 async def check_price_alerts():
     """Iterates through all saved alerts, checks the live price, and DMs users if met."""
     all_alerts = get_all_alerts()
@@ -365,7 +367,7 @@ async def check_price_alerts():
         for alert in alerts_to_remove:
             remove_alert_by_value(int(user_id_str), alert)
 
-@tasks.loop(minutes=5)
+@tasks.loop(minutes=15)
 async def major_news_scanner():
     """Scans for major news every 5 minutes and posts if found."""
     # We need a channel to post to. We can use a configured channel ID from .env

@@ -22,7 +22,9 @@ class ChartModal(discord.ui.Modal, title='View Stock Chart'):
         loop = asyncio.get_event_loop()
         chart_file = await loop.run_in_executor(None, generate_chart, ticker_val)
 
-        if chart_file:
+        if chart_file == "RATE_LIMITED":
+            await interaction.followup.send(f"⚠️ Yahoo Finance rate limit exceeded. Please try again later.", ephemeral=True)
+        elif chart_file:
             await interaction.followup.send(f"📊 Chart for **{ticker_val}**:", file=chart_file, ephemeral=True)
         else:
             await interaction.followup.send(f"❌ Could not generate chart for **{ticker_val}**. Invalid ticker or no data.", ephemeral=True)

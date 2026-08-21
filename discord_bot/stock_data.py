@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import urllib.request
 import json
+import time
 
 # A focused list of tech, memory, and semiconductor stocks, plus VXUS
 POPULAR_TICKERS = [
@@ -25,8 +26,22 @@ def calculate_rsi(data, periods=14):
     rsi = 100 - (100 / (1 + rsi))
     return rsi
 
+# Simple TTL caches to avoid hitting rate limits
+_metrics_cache = {}
+_live_price_cache = {}
+CACHE_TTL = 300 # 5 minutes
+
 def get_stock_metrics(ticker_symbol):
-    """Fetches key metrics for a given ticker."""
+    """Fetches key metrics for a given ticker, with a 5-minute TTL cache."""
+    ticker_symbol = ticker_symbol.upper()
+    current_time = time.time()
+
+    # Check cache first
+    if ticker_symbol in _metrics_cache:
+        cached_data, timestamp = _metrics_cache[ticker_symbol]
+        if current_time - timestamp < CACHE_TTL:
+            return cached_data
+
     try:
         ticker = yf.Ticker(ticker_symbol)
         info = ticker.info
@@ -53,15 +68,24 @@ def get_stock_metrics(ticker_symbol):
         # Use forward PE if trailing PE is not available
         pe_to_use = pe_ratio if pe_ratio else forward_pe
 
-        return {
+        result = {
             'ticker': ticker_symbol,
             'pe_ratio': pe_to_use,
             'rsi': current_rsi,
             'growth_3m': growth_3m,
             'name': info.get('shortName', ticker_symbol)
         }
+
+        # Save to cache
+        _metrics_cache[ticker_symbol] = (result, current_time)
+        return result
     except Exception as e:
         print(f"Error fetching data for {ticker_symbol}: {e}")
+
+        # If rate limited but we have stale cache, return it rather than failing
+        if ticker_symbol in _metrics_cache:
+            return _metrics_cache[ticker_symbol][0]
+
         return None
 
 def analyze_stocks():
@@ -104,8 +128,16 @@ def analyze_stocks():
 
 
 def get_live_price(ticker_symbol):
-    """Fetches the real-time live price of a given ticker."""
+    """Fetches the real-time live price of a given ticker, with a 60-second TTL cache."""
     ticker_symbol = ticker_symbol.upper()
+    current_time = time.time()
+
+    # Check cache first (shorter 60s TTL for live prices)
+    if ticker_symbol in _live_price_cache:
+        cached_data, timestamp = _live_price_cache[ticker_symbol]
+        if current_time - timestamp < 60:
+            return cached_data
+
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}"
     req = urllib.request.Request(url, headers={
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -139,12 +171,14 @@ def get_live_price(ticker_symbol):
                 change = price - prev_close
                 change_pct = (change / prev_close) * 100
 
-            return {
+            result = {
                 'ticker': ticker_symbol,
                 'price': price,
                 'change': change,
                 'change_pct': change_pct
             }
+            _live_price_cache[ticker_symbol] = (result, current_time)
+            return result
     except Exception as e:
         print(f"Error fetching live price for {ticker_symbol} via Yahoo API: {e}")
 
@@ -164,14 +198,21 @@ def get_live_price(ticker_symbol):
                 change = price - prev_close
                 change_pct = (change / prev_close) * 100
 
-            return {
+            result = {
                 'ticker': ticker_symbol,
                 'price': price,
                 'change': change,
                 'change_pct': change_pct
             }
+            _live_price_cache[ticker_symbol] = (result, current_time)
+            return result
         except Exception as fallback_e:
             print(f"Fallback yfinance error for {ticker_symbol}: {fallback_e}")
+
+            # If rate limited but we have stale cache, return it
+            if ticker_symbol in _live_price_cache:
+                return _live_price_cache[ticker_symbol][0]
+
             return None
 
 def scan_unusual_activity():

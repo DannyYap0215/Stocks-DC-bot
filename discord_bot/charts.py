@@ -46,5 +46,10 @@ def generate_chart(ticker_symbol, period="3mo"):
         return discord.File(fp=buf, filename=f"chart_{ticker_symbol.upper()}.png")
 
     except Exception as e:
+        error_str = str(e).lower()
+        if "rate limit" in error_str or "too many requests" in error_str or "429" in error_str or "expecting value" in error_str:
+            print(f"Rate limit error generating chart for {ticker_symbol}: {e}")
+            return "RATE_LIMITED"
+
         print(f"Error generating chart for {ticker_symbol}: {e}")
         return None
