@@ -5,9 +5,9 @@ import urllib.request
 import json
 import pandas as pd
 
-def generate_chart(ticker_symbol, period="3mo"):
+def generate_chart(ticker_symbol, period="6mo"):
     """
-    Generates a candlestick chart for a given ticker and returns it as a Discord File object.
+    Generates an advanced candlestick chart with Bollinger Bands and MACD.
     Returns None if the ticker is invalid or data is unavailable.
     """
     ticker_symbol = ticker_symbol.upper()
@@ -46,23 +46,50 @@ def generate_chart(ticker_symbol, period="3mo"):
             if hist.empty:
                 return None
 
-        # Create an in-memory buffer to save the image
+            # --- Technical Indicators Calculation ---
+
+            # Bollinger Bands (20-day SMA, 2 standard deviations)
+            hist['SMA_20'] = hist['Close'].rolling(window=20).mean()
+            hist['STD_20'] = hist['Close'].rolling(window=20).std()
+            hist['Upper_Band'] = hist['SMA_20'] + (hist['STD_20'] * 2)
+            hist['Lower_Band'] = hist['SMA_20'] - (hist['STD_20'] * 2)
+
+            # MACD (12-day EMA - 26-day EMA)
+            exp1 = hist['Close'].ewm(span=12, adjust=False).mean()
+            exp2 = hist['Close'].ewm(span=26, adjust=False).mean()
+            hist['MACD'] = exp1 - exp2
+            hist['Signal'] = hist['MACD'].ewm(span=9, adjust=False).mean()
+            hist['MACD_Hist'] = hist['MACD'] - hist['Signal']
+
+        # --- Plotting ---
         buf = io.BytesIO()
 
-        # Configure the plot
+        # Define additional plots for Bollinger Bands (Panel 0) and MACD (Panel 2)
+        # Volume automatically goes to Panel 1 if we set volume_panel=1
+        apdict = [
+            # Bollinger Bands
+            mpf.make_addplot(hist['Upper_Band'], color='g', alpha=0.3, panel=0),
+            mpf.make_addplot(hist['Lower_Band'], color='r', alpha=0.3, panel=0),
+
+            # MACD
+            mpf.make_addplot(hist['MACD'], panel=2, color='fuchsia', ylabel='MACD'),
+            mpf.make_addplot(hist['Signal'], panel=2, color='b'),
+            mpf.make_addplot(hist['MACD_Hist'], type='bar', width=0.7, panel=2, color='dimgray', alpha=1, secondary_y=False),
+        ]
+
         kwargs = dict(
             type='candle',
             volume=True,
+            volume_panel=1,
             title=f'\n{ticker_symbol.upper()} - {period}',
             ylabel='Price ($)',
             ylabel_lower='Volume',
             style='yahoo',
-            mav=(20, 50), # 20 and 50 day moving averages
-            figsize=(10, 6)
+            figsize=(12, 8),
+            panel_ratios=(6, 2, 2)
         )
 
-        # Generate the plot and save it to the buffer
-        mpf.plot(hist, **kwargs, savefig=dict(fname=buf, dpi=100, bbox_inches='tight'))
+        mpf.plot(hist, **kwargs, addplot=apdict, savefig=dict(fname=buf, dpi=100, bbox_inches='tight'))
         buf.seek(0)
 
         return discord.File(fp=buf, filename=f"chart_{ticker_symbol.upper()}.png")
