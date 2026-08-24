@@ -238,6 +238,16 @@ async def show_earnings(ctx):
     earnings = get_upcoming_earnings()
     await ctx.send(earnings)
 
+@bot.command(name='insiders', help='Shows the most recent significant insider trades for a ticker: !insiders NVDA')
+async def show_insiders(ctx, ticker: str):
+    await ctx.send(f"🕵️ Scanning SEC filings for **{ticker.upper()}** insider trades...")
+    import asyncio
+    from insiders import get_insider_trades
+    loop = asyncio.get_event_loop()
+    # Run in executor because yfinance can be blocking
+    insider_data = await loop.run_in_executor(None, get_insider_trades, ticker)
+    await ctx.send(insider_data)
+
 @bot.command(name='whales', aliases=['options', 'flow'], help='Scans for massive unusual options activity')
 async def show_whales(ctx):
     await ctx.send("Scanning options chains for whale activity... 🐋 (This takes a moment)")

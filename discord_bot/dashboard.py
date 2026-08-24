@@ -29,6 +29,30 @@ class ChartModal(discord.ui.Modal, title='View Stock Chart'):
         else:
             await interaction.followup.send(f"❌ Could not generate chart for **{ticker_val}**. Invalid ticker or no data.", ephemeral=True)
 
+class InsiderModal(discord.ui.Modal, title='View Insider Trades'):
+    ticker = discord.ui.TextInput(
+        label='Ticker Symbol',
+        placeholder='e.g., TSLA, META, AMZN',
+        required=True,
+        max_length=10,
+        style=discord.TextStyle.short
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        ticker_val = self.ticker.value.upper().strip()
+
+        import asyncio
+        from insiders import get_insider_trades
+
+        loop = asyncio.get_event_loop()
+        insider_data = await loop.run_in_executor(None, get_insider_trades, ticker_val)
+
+        if len(insider_data) > 2000:
+            insider_data = insider_data[:1997] + "..."
+
+        await interaction.followup.send(insider_data, ephemeral=True)
+
 class DashboardView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None) # Timeout None so it stays active
@@ -88,3 +112,7 @@ class DashboardView(discord.ui.View):
     async def btn_chart(self, interaction: discord.Interaction, button: discord.ui.Button):
         # We must return the Modal instantly, we cannot defer first for Modals
         await interaction.response.send_modal(ChartModal())
+
+    @discord.ui.button(label="👔 Insider Trades", style=discord.ButtonStyle.success, custom_id="dashboard_insiders", row=1)
+    async def btn_insiders(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(InsiderModal())
